@@ -6,107 +6,78 @@
  * @flow strict-local
  */
 
-import React from 'react';
-import type {Node} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
+import {GiftedChat} from 'react-native-gifted-chat';
+import uuid from 'react-native-uuid';
+import database from '@react-native-firebase/database';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const userId = uuid.v4();
+const App = () => {
+  const [messages, setMessages] = useState([]);
+  const [userName, setUserName] = useState(undefined);
 
-const Section = ({children, title}): Node => {
-  const isDarkMode = useColorScheme() === 'dark';
+  const db = database();
+
+  const startedAt = useRef(null);
+
+  useEffect(() => {
+    startedAt.current = new Date();
+    setMessages([
+      {
+        _id: 1,
+        text: 'Hello there, type user first message is your username, type it now ⌨️',
+        createdAt: startedAt.current,
+        user: {
+          _id: 0,
+          name: 'Maher',
+          avatar:
+            'https://gravatar.com/avatar/adb9b86a5c022432afeff2bc4458d7a8?s=200&d=wavatar&r=pg',
+        },
+      },
+    ]);
+  }, []);
+
+  useEffect(() => {
+    db.ref('poc').on('child_added', snapshot => {
+      if (
+        snapshot.val().user._id !== userId &&
+        snapshot.val().createdAt &&
+        snapshot.val().createdAt > startedAt.current
+      ) {
+        setMessages(previousMessages =>
+          GiftedChat.append(previousMessages, snapshot.val()),
+        );
+      }
+    });
+  }, [db]);
+
+  const onSend = useCallback(
+    (m = []) => {
+      const msg = m[0];
+      msg.createdAt = new Date().getTime();
+      if (!userName) {
+        setUserName(msg.text);
+        msg.text = `${msg.text} join the chat`;
+      }
+      db.ref('poc').push(msg);
+      setMessages(previousMessages => GiftedChat.append(previousMessages, m));
+    },
+    [db, userName],
+  );
+
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+    <GiftedChat
+      messages={messages}
+      onSend={m => onSend(m)}
+      showUserAvatar
+      renderUsernameOnMessage
+      user={{
+        _id: userId,
+        name: userName || '',
+        avatar: `https://gravatar.com/avatar/${userId}?s=200&d=wavatar&r=pg`,
+      }}
+    />
   );
 };
-
-const App: () => Node = () => {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
-  return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.js</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
 
 export default App;
